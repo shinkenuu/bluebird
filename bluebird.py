@@ -52,8 +52,6 @@ def grab_tweets_with_mentions(screen_name: str):
         tweets.append(tweet)
         print('{} tweet(s) grabbed'.format(mention_num))
         mention_num += 1
-        if mention_num > 30:
-            break
     return tweets
 
 
