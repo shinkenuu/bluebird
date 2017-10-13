@@ -1,0 +1,4 @@
+*pyc
+.idea
+*__pycache__/*
+twitter_api_credentials.json

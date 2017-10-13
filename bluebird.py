@@ -2,6 +2,7 @@
 # encoding: utf-8
 
 
+import csv
 from datetime import datetime
 import json
 import tweepy  # https://github.com/tweepy/tweepy
@@ -19,13 +20,15 @@ api = tweepy.API(auth)
 
 
 class Mention:
-    def __init__(self, mentioned: str, when: datetime, mention_times: int=0):
+    def __init__(self, tweet_id: int, mentioned: str, when: datetime, text: str, mention_times: int=0):
+        self.tweet_id = tweet_id
         self.mentioned = mentioned
         self.when = when
+        self.text = text
         self.mention_times = mention_times
 
-    def __str__(self):
-        return ','.join([self.mentioned, self.when.strftime('%Y-%m-%d'), str(self.mention_times)])
+    def to_list(self):
+        return [self.tweet_id, self.mentioned, self.when.strftime('%Y-%m-%d'), str(self.mention_times), self.text]
 
 
 def grab_tweets_with_mentions(screen_name: str):
@@ -36,17 +39,21 @@ def grab_tweets_with_mentions(screen_name: str):
     tweets = []
 
     mention_num = 1
-    for status in tweepy.Cursor(api.user_timeline, screen_name=screen_name).items(200):
+    for status in tweepy.Cursor(api.user_timeline, screen_name=screen_name).items():
         if len(status.entities['user_mentions']) < 1 or len(status.entities['hashtags']) < 1:
             continue  # ignore tweets without mentions or hash tags
         tweet = {
+            'id': status.id_str,
             'created_at': status.created_at,
             'screen_names': set([user_mention['screen_name'] for user_mention in status.entities['user_mentions']]),
             'hashtags': set([hashtag['text'] for hashtag in status.entities['hashtags']]),
+            'text': status.text
         }
         tweets.append(tweet)
         print('{} tweet(s) grabbed'.format(mention_num))
         mention_num += 1
+        if mention_num > 30:
+            break
     return tweets
 
 
@@ -60,9 +67,11 @@ def init_mentions(tweets: list):
 
     for tweet in tweets:
         for screen_name in tweet['screen_names']:
-            mentions.append(Mention(mentioned=screen_name, when=tweet['created_at']))
+            mentions.append(Mention(tweet_id=tweet['id'], mentioned=screen_name,
+                                    when=tweet['created_at'], text=tweet['text']))
         for hashtag in tweet['hashtags']:
-            mentions.append(Mention(mentioned=hashtag, when=tweet['created_at']))
+            mentions.append(Mention(tweet_id=tweet['id'], mentioned=hashtag,
+                                    when=tweet['created_at'], text=tweet['text']))
 
     for mention_year_month in set([mention.when.date().replace(day=1) for mention in mentions]):
         mentions_within_same_month = [mention for mention in mentions
@@ -85,10 +94,11 @@ def create_file_with_mentions(mentions: list, path_to_file: str=os.path.expandus
     with open(file_path, 'w'):
         pass
 
-    with open(file_path, 'w') as file:
-        file.write('mentioned,when,times_same_month\n')
+    with open(file_path, 'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['tweet_id', 'mentioned', 'when', 'times_same_month', 'text'])
         for mention in mentions:
-            file.write(str(mention) + '\n')
+            writer.writerow(mention.to_list())
 
     return file_path
 
